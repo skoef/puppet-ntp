@@ -29,14 +29,16 @@ class ntp::params {
   ### Application related parameters
 
   $package = $::operatingsystem ? {
-    'Solaris' => $::operatingsystemrelease ? {
+    /(?i:FreeBSD)/ => '',  # Package resides in base
+    'Solaris'      => $::operatingsystemrelease ? {
       '5.10'  => [ 'SUNWntpr' , 'SUNWntpu' ],
       default => 'ntp',
     },
-    default   => 'ntp',
+    default        => 'ntp',
   }
   $ntpdate_package = $::operatingsystem ? {
     /(?i:Debian|Ubuntu|Mint)/ => 'ntpdate',
+    /(?i:FreeBSD)/            => '',  # Package resides in base
     'Solaris'                 => $::operatingsystemrelease ? {
       '5.10'  => [ 'SUNWntpr' , 'SUNWntpu' ],
       default => 'ntp',
@@ -86,6 +88,7 @@ class ntp::params {
   }
 
   $config_file_group = $::operatingsystem ? {
+    /(?i:FreeBSD)/       => 'wheel',
     /(?i:SLES|OpenSuSE)/ => 'ntp',
     default              => 'root',
   }
@@ -101,8 +104,9 @@ class ntp::params {
   }
 
   $data_dir = $::operatingsystem ? {
-    'Solaris' => '/var/ntp',
-    default   => '/var/lib/ntp',
+    /(?i:FreeBSD)/ => '/var/db/',
+    'Solaris'      => '/var/ntp',
+    default        => '/var/lib/ntp',
   }
 
   $log_dir = $::operatingsystem ? {
@@ -126,6 +130,27 @@ class ntp::params {
   $tinker_panic = $::virtual ? {
     'vmware' => 0, # See http://www.vmware.com/pdf/vmware_timekeeping.pdf page 18
     default  => '',
+  }
+
+  $time_zone_file = $::operatingsystem ? {
+    default => '/etc/localtime',
+  }
+
+  $time_zone_owner = $::operatingsystem ? {
+    default => 'root',
+  }
+
+  $time_zone_group = $::operatingsystem ? {
+    'FreeBSD' => 'wheel',
+    default   => 'root',
+  }
+
+  $time_zone_mode = $::operatingsystem ? {
+    default => '0444',
+  }
+
+  $time_zone_path = $::operatingsystem ? {
+    default => '/usr/share/zoneinfo/',
   }
 
   $port = '123'
