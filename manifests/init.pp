@@ -400,10 +400,16 @@ class ntp (
     }
   }
 
+  $manage_package_noop = $ntp::real_package ? {
+    ''      => true,
+    default => false,
+  }
+
   ### Managed resources
   package { 'ntp':
     ensure => $ntp::manage_package,
     name   => $ntp::real_package,
+    noop   => $ntp::manage_package_noop,
   }
 
   if $runmode == 'service' and !$ntp::bool_absent {
@@ -414,6 +420,13 @@ class ntp (
       hasstatus  => $ntp::service_status,
       pattern    => $ntp::process,
       require    => Package['ntp'],
+    }
+
+    if $::operatingsystem =~ /(?i:FreeBSD)/ {
+      service { 'ntpdate':
+        ensure => $ntp::manage_service_ensure,
+        enable => $ntp::manage_service_enable,
+      }
     }
   }
 
@@ -458,20 +471,23 @@ class ntp (
     }
   }
 
+  $manage_keys_file_source = $keys_file_source ? {
+    '' => undef,
+    default => $keys_file_source,
+  }
+
   # The ntp keys file is managed if exists a source
-  if $ntp::keys_file_source {
-    file { 'ntp.key':
-      ensure  => $ntp::manage_file,
-      path    => $ntp::keys_file,
-      mode    => '0600',
-      owner   => $ntp::config_file_owner,
-      group   => $ntp::config_file_group,
-      require => Package['ntp'],
-      notify  => $ntp::manage_service_autorestart,
-      source  => $ntp::keys_file_source,
-      replace => $ntp::manage_file_replace,
-      audit   => $ntp::manage_audit,
-    }
+  file { 'ntp.key':
+    ensure  => $ntp::manage_file,
+    path    => $ntp::keys_file,
+    mode    => '0600',
+    owner   => $ntp::config_file_owner,
+    group   => $ntp::config_file_group,
+    require => Package['ntp'],
+    notify  => $ntp::manage_service_autorestart,
+    source  => $manage_keys_file_source,
+    replace => $ntp::manage_file_replace,
+    audit   => $ntp::manage_audit,
   }
 
   ### Include custom class if $my_class is set
@@ -527,11 +543,11 @@ class ntp (
   # Time zone
   if $ntp::manage_time_zone == true {
     if $::osfamily == 'Solaris' {
-       file_line { 'ntp_localtime':
-         path  => '/etc/default/init',
-         line  => "TZ=${time_zone}",
-         match => '^TZ=',
-       }
+      file_line { 'ntp_localtime':
+        path  => '/etc/default/init',
+        line  => "TZ=${time_zone}",
+        match => '^TZ=',
+      }
     } else {
       file { 'ntp_localtime':
         ensure => file,
