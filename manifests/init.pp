@@ -424,7 +424,6 @@ class ntp (
 
     if $::operatingsystem =~ /(?i:FreeBSD)/ {
       service { 'ntpdate':
-        ensure => $ntp::manage_service_ensure,
         enable => $ntp::manage_service_enable,
       }
     }
