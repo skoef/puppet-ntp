@@ -20,8 +20,9 @@ class ntp::params {
   $cron_command = 'ntpd -q'
 
   $keys_file = $::operatingsystem ? {
-    'Solaris'            => '/etc/inet/ntp.keys',
+    /(?i:Solaris)/       => '/etc/inet/ntp.keys',
     /(?i:SLES|OpenSuSE)/ => '/etc/ntp.keys',
+    /(?i:FreeBSD)/       => '',
     default              => '/etc/ntp/keys',
   }
   $keys_file_source = ''
@@ -29,27 +30,23 @@ class ntp::params {
   ### Application related parameters
 
   $package = $::operatingsystem ? {
-    /(?i:FreeBSD)/ => '',  # Package resides in base
-    'Solaris'      => $::operatingsystemrelease ? {
-      '5.10'  => [ 'SUNWntpr' , 'SUNWntpu' ],
-      default => 'ntp',
-    },
-    default        => 'ntp',
+    /(?i:FreeBSD)/         => 'net/openntpd',
+    /(?i:Solaris)/         => '',  # Package resides in base
+    default                => 'ntp',
   }
+
   $ntpdate_package = $::operatingsystem ? {
     /(?i:Debian|Ubuntu|Mint)/ => 'ntpdate',
-    /(?i:FreeBSD)/            => '',  # Package resides in base
-    'Solaris'                 => $::operatingsystemrelease ? {
-      '5.10'  => [ 'SUNWntpr' , 'SUNWntpu' ],
-      default => 'ntp',
-    },
+    /(?i:Solaris|FreeBSD)/    => '',  # Package resides in base
     default                   => 'ntp',
   }
 
   $service = $::operatingsystem ? {
-    /(?i:Debian|Ubuntu|Mint|Solaris)/ => 'ntp',
-    /(?i:SLES|OpenSuSE)/              => 'ntp',
-    default                           => 'ntpd',
+    /(?i:Debian|Ubuntu|Mint)/  => 'ntp',
+    /(?i:SLES|OpenSuSE)/       => 'ntp',
+    /(?i:Solaris)/             => 'network/ntp',
+    /(?i:FreeBSD)/             => 'openntpd',
+    default                    => 'ntpd',
   }
 
   $service_status = $::operatingsystem ? {
@@ -65,17 +62,19 @@ class ntp::params {
   }
 
   $process_user = $::operatingsystem ? {
-    default => 'ntp',
+    /(?i:FreeBSD)/ => '_ntp',
+    default        => 'ntp',
   }
 
   $config_dir = $::operatingsystem ? {
-    'Solaris' => '/etc/inet',
+    /(?i:Solaris)/ => '/etc/inet',
     default   => '/etc/ntp',
   }
 
   $config_file = $::operatingsystem ? {
-    'Solaris' => '/etc/inet/ntp.conf',
-    default   => '/etc/ntp.conf',
+    /(?i:Solaris)/ => '/etc/inet/ntp.conf',
+    /(?i:FreeBSD)/ => '/usr/local/etc/ntpd.conf',
+    default        => '/etc/ntp.conf',
   }
 
   $config_file_mode = $::operatingsystem ? {
@@ -88,8 +87,8 @@ class ntp::params {
   }
 
   $config_file_group = $::operatingsystem ? {
-    /(?i:FreeBSD)/       => 'wheel',
     /(?i:SLES|OpenSuSE)/ => 'ntp',
+    /(?i:FreeBSD)/       => 'wheel',
     default              => 'root',
   }
 
@@ -99,13 +98,14 @@ class ntp::params {
   }
 
   $pid_file = $::operatingsystem ? {
-    'Solaris' => '/var/run/ntp.pid',
-    default   => '/var/run/ntpd.pid',
+    /(?i:Solaris)/ => '/var/run/ntp.pid',
+    /(?i:FreeBSD)/ => '',
+    default        => '/var/run/ntpd.pid',
   }
 
   $data_dir = $::operatingsystem ? {
-    /(?i:FreeBSD)/ => '/var/db/',
-    'Solaris'      => '/var/ntp',
+    /(?i:Solaris)/ => '/var/ntp',
+    /(?i:FreeBSD)/ => '',
     default        => '/var/lib/ntp',
   }
 
@@ -118,8 +118,13 @@ class ntp::params {
   }
 
   $drift_file = $::operatingsystem ? {
-    /(?i:Debian|Ubuntu|Mint|Solaris)/ => "${data_dir}/ntp.drift",
-    default                           => "${data_dir}/drift",
+    /(?i:Debian|Ubuntu|Mint|Solaris)/ => "$data_dir/ntp.drift",
+    default                           => "$data_dir/drift",
+  }
+
+  $template = $::operatingsystem ? {
+    /(?i:FreeBSD)/ => 'ntp/openntp.conf.erb',
+    default        => 'ntp/ntp.conf.erb',
   }
 
   $use_local_clock = $::virtual ? {
@@ -161,7 +166,6 @@ class ntp::params {
   $source = ''
   $source_dir = ''
   $source_dir_purge = false
-  $template = 'ntp/ntp.conf.erb'
   $options = ''
   $service_autorestart = true
   $version = 'present'
@@ -173,10 +177,7 @@ class ntp::params {
   $monitor = false
   $monitor_tool = ''
   $monitor_target = $::ipaddress
-  $firewall = false
-  $firewall_tool = ''
-  $firewall_src = '0.0.0.0/0'
-  $firewall_dst = $::ipaddress
+  $firewall = true
   $puppi = false
   $puppi_helper = 'standard'
   $debug = false

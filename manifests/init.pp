@@ -122,22 +122,6 @@
 #   Can be defined also by the (top scope) variables $ntp_firewall
 #   and $firewall
 #
-# [*firewall_tool*]
-#   Define which firewall tool(s) (ad defined in Example42 firewall module)
-#   you want to use to open firewall for ntp port(s)
-#   Can be defined also by the (top scope) variables $ntp_firewall_tool
-#   and $firewall_tool
-#
-# [*firewall_src*]
-#   Define which source ip/net allow for firewalling ntp. Default: 0.0.0.0/0
-#   Can be defined also by the (top scope) variables $ntp_firewall_src
-#   and $firewall_src
-#
-# [*firewall_dst*]
-#   Define which destination ip to use for firewalling. Default: $ipaddress
-#   Can be defined also by the (top scope) variables $ntp_firewall_dst
-#   and $firewall_dst
-#
 # [*debug*]
 #   Set to 'true' to enable modules debugging
 #   Can be defined also by the (top scope) variables $ntp_debug and $debug
@@ -253,9 +237,6 @@ class ntp (
   $puppi               = params_lookup( 'puppi' , 'global' ),
   $puppi_helper        = params_lookup( 'puppi_helper' , 'global' ),
   $firewall            = params_lookup( 'firewall' , 'global' ),
-  $firewall_tool       = params_lookup( 'firewall_tool' , 'global' ),
-  $firewall_src        = params_lookup( 'firewall_src' , 'global' ),
-  $firewall_dst        = params_lookup( 'firewall_dst' , 'global' ),
   $debug               = params_lookup( 'debug' , 'global' ),
   $audit_only          = params_lookup( 'audit_only' , 'global' ),
   $package             = params_lookup( 'package' ),
@@ -413,14 +394,26 @@ class ntp (
     }
   }
 
+  if $::operatingsystem =~ /(?i:FreeBSD)/ {
+    exec { 'disable-stock-ntpd':
+      command => "pkill -f /usr/sbin/ntpd; \
+                  sed -i '' '/^ntpd_enable=/d' /etc/rc.conf; \
+                  rm /etc/ntp.conf; \
+                  rm /etc/rc.conf.d/ntpd",
+      onlyif  => 'pgrep -f /usr/sbin/ntpd',
+      path    => ['/bin', '/usr/bin'],
+      before  => Package['ntp'],
+    }
+  }
+
   if $runmode == 'service' and !$ntp::bool_absent {
     service { 'ntp':
-      ensure    => $ntp::manage_service_ensure,
-      name      => $ntp::service,
-      enable    => $ntp::manage_service_enable,
-      hasstatus => $ntp::service_status,
-      pattern   => $ntp::process,
-      require   => $manage_package_require,
+      ensure     => $ntp::manage_service_ensure,
+      name       => $ntp::service,
+      enable     => $ntp::manage_service_enable,
+      hasstatus  => $ntp::service_status,
+      pattern    => $ntp::process,
+      require    => $manage_package_require,
     }
 
     if $::operatingsystem =~ /(?i:FreeBSD)/ {
@@ -471,23 +464,20 @@ class ntp (
     }
   }
 
-  $manage_keys_file_source = $keys_file_source ? {
-    '' => undef,
-    default => $keys_file_source,
-  }
-
   # The ntp keys file is managed if exists a source
-  file { 'ntp.key':
-    ensure  => $ntp::manage_file,
-    path    => $ntp::keys_file,
-    mode    => '0600',
-    owner   => $ntp::config_file_owner,
-    group   => $ntp::config_file_group,
-    require => $manage_package_require,
-    notify  => $ntp::manage_service_autorestart,
-    source  => $manage_keys_file_source,
-    replace => $ntp::manage_file_replace,
-    audit   => $ntp::manage_audit,
+  if $ntp::keys_file_source {
+    file { 'ntp.key':
+      ensure  => $ntp::manage_file,
+      path    => $ntp::keys_file,
+      mode    => '0600',
+      owner   => $ntp::config_file_owner,
+      group   => $ntp::config_file_group,
+      require => $manage_package_require,
+      notify  => $ntp::manage_service_autorestart,
+      source  => $ntp::keys_file_source,
+      replace => $ntp::manage_file_replace,
+      audit   => $ntp::manage_audit,
+    }
   }
 
   ### Include custom class if $my_class is set
@@ -543,11 +533,11 @@ class ntp (
   # Time zone
   if $ntp::manage_time_zone == true {
     if $::osfamily == 'Solaris' {
-      file_line { 'ntp_localtime':
-        path  => '/etc/default/init',
-        line  => "TZ=${time_zone}",
-        match => '^TZ=',
-      }
+        file_line { 'ntp_localtime':
+          path  => '/etc/default/init',
+          line  => "TZ=${time_zone}",
+          match => '^TZ=',
+        }
     } else {
       file { 'ntp_localtime':
         ensure => file,
@@ -563,18 +553,14 @@ class ntp (
 
   ### Firewall management, if enabled ( firewall => true )
   if $ntp::bool_firewall == true {
-    firewall { "ntp_${ntp::protocol}_${ntp::port}":
-      source      => $ntp::firewall_src,
-      destination => $ntp::firewall_dst,
-      protocol    => $ntp::protocol,
-      port        => $ntp::port,
-      action      => 'allow',
-      direction   => 'input',
-      tool        => $ntp::firewall_tool,
-      enable      => $ntp::manage_firewall,
+    firewall::rule { "ntp_${ntp::protocol}_${ntp::port}-out":
+      protocol       => $ntp::protocol,
+      port           => $ntp::port,
+      action         => 'allow',
+      direction      => 'output',
+      enable         => $ntp::manage_firewall,
     }
   }
-
 
   ### Debugging, if enabled ( debug => true )
   if $ntp::bool_debug == true {

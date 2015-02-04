@@ -1,0 +1,10 @@
+# File managed by Puppet
+
+# Addresses to listen on (ntpd does not listen by default)
+#listen on *
+
+# use a random selection of NTP Pool Time Servers
+# see http://support.ntp.org/bin/view/Servers/NTPPoolServers
+<% scope.lookupvar('ntp::array_servers').each do |ntp| -%>
+servers <%= ntp %>
+<% end -%>
